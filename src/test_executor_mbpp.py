@@ -41,7 +41,7 @@ language = ["python", "cpp", "js", "go", "js"]
 
 def process_test(sample, dataset, language=language, test_case=True, canonical_solution=False):
     task_id = sample["task_id"]
-    task_id = problems.index(sample)
+    # task_id = problems.index(sample)
     prompt = sample["prompt"]
     code = sample["completion"]
     if canonical_solution:
@@ -55,6 +55,7 @@ def process_test(sample, dataset, language=language, test_case=True, canonical_s
             tests = ""
             for test in test_case:
                 tests += "\n" + test
+                
         test_string = code + "\n" + tests
     return test_string
 
@@ -132,7 +133,9 @@ def time_limit(seconds: float):
 def test_report(dataset, lg):
     correct = 0
     for i in tqdm(range(len(dataset))):
-        dataset[i]["full_code"] = process_test(dataset[i], dataset, language=lg, test_case=False, canonical_solution=False)
+        dataset[i]["test_code"] = process_test(dataset[i], dataset, language=lg, test_case=False, canonical_solution=False)
+        dataset[i]["generation"] = dataset[i]["completion"]
+
         result = check_correctness(dataset[i]["task_id"], dataset[i], lg, 5, "./tmp")
         if result["passed"] == True:
             correct += 1
@@ -147,14 +150,17 @@ def test_report(dataset, lg):
 def test_agent(dataset, lg):
     correct = 0
     for i in tqdm(range(len(dataset))):
-        dataset[i]["full_code"] = process_test(dataset[i], dataset, language=lg, test_case=True, canonical_solution=False)
+        dataset[i]["test_code"] = process_test(dataset[i], dataset, language=lg, test_case=False, canonical_solution=False)
+        dataset[i]["generation"] = dataset[i]["completion"]
+
         result = check_correctness(dataset[i]["task_id"], dataset[i], lg, 5, "./tmp")
         if result["passed"] == True:
             correct += 1
         dataset[i]["result"] = result["result"]
         dataset[i]["passed"] = result["passed"]
     print("============Start Agent Testing=================")
-    print("test_report", correct)
+    correct_percent = correct / len(dataset) * 100
+    print(f"agent_report, {correct_percent:0.2f}")
     return dataset
 
 
@@ -170,13 +176,13 @@ if __name__ == "__main__":
             epoch = 5
             for current_epoch in range(epoch):
                 print(lg, current_epoch)
-                test_report(dataset, lg)
-                # test_agent(dataset, lg)
-                dataset = call_completion(dataset, model_name, lg)
-                epoch_path = MBPP_PATH_WITH_SUFFIX.replace("mbpp_temp01.json", f"{current_epoch}_mbpp_temp01.json")
-                total_path = MBPP_PATH_WITH_SUFFIX.replace("mbpp_temp01.json",
-                                                           f"{current_epoch}_mbpp_temp01_total.json")
-                with open(epoch_path, "w") as f:
-                    json.dump(dataset, f, indent=4)
-            with open(total_path, "w") as f:
-                json.dump(dataset, f, indent=4)
+                # test_report(dataset, lg)
+                test_agent(dataset, lg)
+            #     dataset = call_completion(dataset, model_name, lg)
+            #     epoch_path = MBPP_PATH_WITH_SUFFIX.replace("mbpp_temp01.json", f"{current_epoch}_mbpp_temp01.json")
+            #     total_path = MBPP_PATH_WITH_SUFFIX.replace("mbpp_temp01.json",
+            #                                                f"{current_epoch}_mbpp_temp01_total.json")
+            #     with open(epoch_path, "w") as f:
+            #         json.dump(dataset, f, indent=4)
+            # with open(total_path, "w") as f:
+            #     json.dump(dataset, f, indent=4)

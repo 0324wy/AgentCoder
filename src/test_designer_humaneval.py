@@ -55,6 +55,7 @@ def fetch_completion(data_entry, model, lg,times=10):
                 ],
                 timeout=100)
                 test_case = completions.choices[0].message.content
+                print(test_case)
                 test_case = preprocess_data(test_case)
             except Exception as e:
                 time.sleep(20)
