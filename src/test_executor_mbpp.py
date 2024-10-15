@@ -49,7 +49,10 @@ def process_test(sample, dataset, language=language, test_case=True, canonical_s
     # Pre-process for different languages
     if language == "python" or language == "py":
         if test_case:
-            tests = sample["test_case_list"]
+            test_case = sample["test_case_list"]
+            tests = ""
+            for test in test_case:
+                tests += "\n" + test
         else:
             test_case = sample["test_list"]
             tests = ""
@@ -131,6 +134,7 @@ def time_limit(seconds: float):
 
 
 def test_report(dataset, lg):
+    correct_list = []
     correct = 0
     for i in tqdm(range(len(dataset))):
         dataset[i]["test_code"] = process_test(dataset[i], dataset, language=lg, test_case=False, canonical_solution=False)
@@ -139,25 +143,28 @@ def test_report(dataset, lg):
         result = check_correctness(dataset[i]["task_id"], dataset[i], lg, 5, "./tmp")
         if result["passed"] == True:
             correct += 1
-        dataset[i]["report_passed"] = result["passed"]
-        dataset[i]["report_result"] = result["result"]
+            correct_list.append(dataset[i]["task_id"])
+        # dataset[i]["report_passed"] = result["passed"]
+        # dataset[i]["report_result"] = result["result"]
     print("==============Start Report Testing==============")
-    correct_percent = correct / len(dataset) * 100
-    print(f"test_report, {correct_percent:0.2f}")
+    # correct_percent = correct / len(dataset) * 100
+    # print(f"test_report, {correct_percent:0.2f}")
+    print(correct_list)
     return dataset
 
 
 def test_agent(dataset, lg):
     correct = 0
     for i in tqdm(range(len(dataset))):
-        dataset[i]["test_code"] = process_test(dataset[i], dataset, language=lg, test_case=False, canonical_solution=False)
+        dataset[i]["test_code"] = process_test(dataset[i], dataset, language=lg, test_case=True, canonical_solution=False)
         dataset[i]["generation"] = dataset[i]["completion"]
 
         result = check_correctness(dataset[i]["task_id"], dataset[i], lg, 5, "./tmp")
         if result["passed"] == True:
             correct += 1
-        dataset[i]["result"] = result["result"]
-        dataset[i]["passed"] = result["passed"]
+            print(dataset[i]["task_id"])
+        # dataset[i]["result"] = result["result"]
+        # dataset[i]["passed"] = result["passed"]
     print("============Start Agent Testing=================")
     correct_percent = correct / len(dataset) * 100
     print(f"agent_report, {correct_percent:0.2f}")

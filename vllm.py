@@ -42,6 +42,7 @@ from openai import OpenAI
 
 client = OpenAI(
     base_url="http://localhost:8000/v1",
+    api_key=""
 )
 
 model_list = ["Qwen/Qwen2.5-7B", "meta-llama/Llama-3.1-8B"]
