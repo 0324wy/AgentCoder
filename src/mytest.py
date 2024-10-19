@@ -14,7 +14,6 @@ list = [12, 14, 16, 17, 18, 57, 58, 59, 61, 62, 63, 64, 65, 66, 67, 70, 71, 74, 
 
 for i in tqdm(range(len(dataset))):
     sample = dataset[i]
-    if sample
     sample["generation"] = sample["completion"]
     sample["test_code"] = sample["test_list"]
 
