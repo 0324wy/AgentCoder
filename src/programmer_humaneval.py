@@ -29,6 +29,7 @@ def fetch_completion(construct_few_shot_prompt, data_entry, model, lg, times=1, 
     ## Completion 3:
     """
 
+    # TODO: why list?
     completions_code = []
     if api_dict:
         client = OpenAI(base_url=api_dict["base_url"], api_key=api_dict["api_key"])
