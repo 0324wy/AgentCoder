@@ -28,6 +28,7 @@ from codegeex.benchmark.execution import check_correctness
 import tempfile
 from constant_value import HUMAN_EVAL_DATASET_PATH, API_KEY
 from openai import OpenAI
+from mytest import transform_to_check_function
 
 client = OpenAI(api_key=API_KEY)
 
@@ -229,24 +230,15 @@ def preprocess_data(task, lg):
 def test_report(dataset, lg):
     correct = 0
     test_setup = "\n".join(IMPORT_HELPER["python"]) + "\n"
+    
+    
     for i in tqdm(range(len(dataset))):
-        try:
-            with swallow_io():
-                with time_limit(2.0):
-                    exec(
-                        test_setup
-                        + "\n"
-                        + dataset[i]["completion"]
-                        + "\n"
-                        + dataset[i]["test"]
-                        + "\n"
-                        + f"check({dataset[i]['entry_point']})"
-                    )
-                correct += 1
-        except Exception as exc:
-            pass
+        result = check_code(dataset[i]["task_id"], dataset[i])
+        if result["passed"]:
+            correct += 1
     print("==============Start Report Testing==============")
     print(f"test_report: {(correct/len(dataset)*100):.1f}")
+
 
 
 def fix_bug(data_entry, model,lg, times, api_dict=None):
@@ -302,23 +294,20 @@ def call_fix_bug(dataset, model,lg, times = 1, api_dict=None):
 
 
 def check_code(task_id: str, sample: dict, completion_id: Optional[int] = None):
-    test_setup = "\n".join(IMPORT_HELPER["python"]) + "\n"
     try:
         with swallow_io():
             with time_limit(2.0):
-                exec(
-                    test_setup
-                    + "\n"
-                    + sample["completion"]
-                    + "\n"
-                    + sample["test"]
-                    + "\n"
-                    + f"check({sample['entry_point']})"
-                )
+                exec(sample["full_code"])
                 result = "passed"
-    except Exception as exc:
-        print(exc)
-        result = "Exception"
+                
+    except TimeoutException:
+        result="timed out"
+    except AssertionError as e:
+        result=f"failed: AssertionError:{e}"
+    except BaseException as e:
+        result=(f"failed: {e}")
+    except Exception as e:
+        result = f"Exception{e}"
         pass
 
     print("result:======", task_id, result)
@@ -364,8 +353,9 @@ def test_agent_concurrency2(dataset, lg):
                 # if f"assert {dataset[i]['entry_point']}(" not in test_case_list[k]:
                 #     print("hhhhh")
                 #     continue
-                dataset[i]["full_code"] = test_setup + "\n" + completion_list[j] + "\n" + test_case_list[k]
+                dataset[i]["full_code"] = test_setup + "\n" + completion_list[j] + "\n" + transform_to_check_function(test_case_list[k]) + "\n" + f"check({dataset[i]['entry_point']})"
                 dataset[i]["completion"] = completion_list[j]
+                #  test_case_list[k]
                 result = check_code(dataset[i]["task_id"], dataset[i])
                 # print(f"result: {result['result']}")
                 if result["passed"]:
@@ -495,12 +485,13 @@ if __name__ == "__main__":
             with open(HUMAN_EVAL_DATASET_PATH, "r") as f:
                 dataset = json.load(f)
 
-            epoch = 5
+            epoch = 1
             for current_epoch in range(epoch):
+                # TODO: check test and test code list
                 dataset = test_agent_concurrency2(dataset, lg)
-                epoch_path = HUMAN_EVAL_DATASET_PATH.replace("humaneval_temp01.json", f"{current_epoch}_humaneval_temp01.json")
-                with open(epoch_path, "w") as f:
-                    json.dump(dataset, f, indent=4)
-                dataset = call_fix_bug(dataset,model,lg)
-            dataset = test_agent_concurrency2(dataset,lg)
+            #     epoch_path = HUMAN_EVAL_DATASET_PATH.replace("humaneval_temp01.json", f"{current_epoch}_humaneval_temp01.json")
+            #     with open(epoch_path, "w") as f:
+            #         json.dump(dataset, f, indent=4)
+            #     dataset = call_fix_bug(dataset,model,lg)
+            # dataset = test_agent_concurrency2(dataset,lg)
 

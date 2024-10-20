@@ -1,52 +1,108 @@
-from constant_value import MBPP_PATH_WITH_SUFFIX
+from constant_value import HUMAN_EVAL_DATASET_PATH
 import json
-from tqdm import tqdm
-from codegeex.benchmark.execution import check_correctness
+
+import re
+
+# def transform_to_check_function(test_string):
+#     # Metadata block
+#     metadata = "METADATA = {\n    'author': 'jt',\n    'dataset': 'test'\n}\n\n"
+    
+#     # Start the check function
+#     check_function = "def check(candidate):\n"
+
+#     # Split the test_string into individual lines
+#     lines = test_string.strip().split("\n")
+
+#     # Regular expression to match the assert pattern
+#     assert_pattern = re.compile(r'assert\s+([^\s,]+)\s*==\s*([^\s,]+)')
+    
+#     # Loop through the lines and format them into the check function
+#     for line in lines:
+#         if 'assert' in line:
+#             # Strip away the comment part after the comma (if it exists)
+#             line = line.split(',')[0].strip()
+            
+#             # Find the actual assert statements
+#             match = assert_pattern.search(line)
+#             if match:
+#                 left = match.group(1).strip()
+#                 right = match.group(2).strip()
+                
+#                 # Check if it's a floating-point number
+#                 if '.' in right:
+#                     check_function += f"    assert abs({left} - {right}) < 1e-6\n"
+#                 else:
+#                     check_function += f"    assert {left} == {right}\n"
+
+#     # Combine metadata and check_function
+#     result = metadata + check_function
+#     return result
+
+import re
+
+def remove_last_comment_in_quotes(assert_string):
+    # Regular expression to find and remove the last quoted string (wrapped with "")
+    pattern = re.compile(r'(\".*\")$')
+    
+    result = []
+    for line in assert_string.splitlines():
+        # Remove the last quoted string and strip trailing whitespace
+        clean_line = re.sub(pattern, '', line).rstrip()
+        if clean_line:  # Only add non-empty lines
+            result.append(clean_line)
+    
+    return "\n".join(result)
 
 
-path = MBPP_PATH_WITH_SUFFIX
-with open(path, "r") as f:
+def transform_to_check_function(assert_string):
+    # Remove comments first
+    cleaned_string = remove_last_comment_in_quotes(assert_string)
+
+    # Extract the function name from the first assert statement
+    first_line = cleaned_string.splitlines()[0]
+    function_name = re.search(r'([a-zA-Z_][a-zA-Z0-9_]*)\(', first_line).group(1)
+
+    # Metadata block
+    metadata = "METADATA = {\n    'author': 'jt',\n    'dataset': 'test'\n}\n\n"
+    
+    # Start the check function with the extracted function name
+    check_function = f"def check({function_name}):\n"
+
+    # Split the cleaned string into individual lines
+    lines = cleaned_string.strip().split("\n")
+
+    # Loop through the lines and format them into the check function
+    for line in lines:
+        if 'assert' in line:
+            # Remove the 'assert' keyword and split at '=='
+            line = line.strip().replace('assert ', '')
+            left, right = line.split("==")
+            left = left.strip()
+            right = right.strip().rstrip(',')
+
+            # Check if the right side is a floating-point number
+            if '.' in right:
+                check_function += f"    assert abs({left} - {right}) < 1e-6\n"
+            else:
+                check_function += f"    assert {left} == {right}\n"
+
+    # Combine metadata and check_function
+    result = metadata + check_function
+    return result
+
+
+
+with open(HUMAN_EVAL_DATASET_PATH, "r") as f:
     dataset = json.load(f)
 
-correct = 0
-
-list = [12, 14, 16, 17, 18, 57, 58, 59, 61, 62, 63, 64, 65, 66, 67, 70, 71, 74, 75, 77, 79, 82, 84, 86, 88, 92, 93, 94, 95, 96, 97, 99, 100, 103, 104, 105, 106, 108, 111, 117, 118, 119, 120, 127, 128, 129, 130, 132, 135, 140, 141, 142, 160, 161, 162, 164, 165, 166, 168, 170, 171, 172, 222, 226, 227, 230, 232, 233, 234, 237, 240, 244, 245, 250, 251, 256, 257, 259, 261, 262, 264, 265, 266, 267, 269, 270, 271, 272, 273, 274, 277, 278, 280, 281, 282, 283, 284, 285, 286, 287, 290, 291, 292, 297, 305, 308, 309, 388, 389, 390, 391, 393, 398, 399, 401, 404, 405, 406, 407, 409, 413, 414, 417, 419, 420, 421, 424, 425, 426, 428, 429, 432, 434, 435, 437, 441, 446, 447, 450, 451, 456, 457, 458, 459, 460, 463, 464, 465, 470, 471, 473, 474, 475, 476, 477, 478, 479]
-
-for i in tqdm(range(len(dataset))):
-    sample = dataset[i]
-    sample["generation"] = sample["completion"]
-    sample["test_code"] = sample["test_list"]
-
-    result = check_correctness(sample["task_id"], sample, "python", 5, "./tmp")
-
-    # print(result["passed"])
-
-    if result["passed"] == True:
-        correct += 1
-
-print("==============Start Report Testing==============")
-correct_percent = correct / len(dataset) * 100
-print(f"test_report, {correct_percent:0.2f}")
-
-# print(len(dataset))
-
-# print(dataset[0])
-
-
-
-
-# Convert and pretty-print the dictionary as a JSON string
-# json_data = json.dumps(sample, indent=4)
-
-# # Print the readable JSON
-# print(json_data)
-
-
-
-
-
-
-
-
-# print(result)
-
+for i in range(len(dataset)):
+    input = dataset[i]["test_case_list"][0]
+    print("=========input===========", i)
+    print(input)
+    
+    
+    output = transform_to_check_function(input)
+    print("=========output===========", i)
+    print(output)
+    
+    
