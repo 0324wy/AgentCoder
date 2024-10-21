@@ -93,7 +93,7 @@ if __name__ == "__main__":
 
             dataset = load_dataset("openai_humaneval", split="test")
             dataset = [entry for entry in dataset]
-            dataset = dataset[:5]
+            # dataset = dataset[:5]
             with ThreadPoolExecutor(max_workers=5) as executor:
                 future_to_entry = {
                     executor.submit(

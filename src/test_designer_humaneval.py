@@ -45,6 +45,8 @@ def fetch_completion(construct_few_shot_prompt, data_entry, model, times=1):
                     temperature=0,
                 )
                 test_case = completions.choices[0].message.content
+                # if data_entry["task_id"] == "HumanEval/17":
+                #     print(test_case)
                 test_case = preprocess_data(test_case)
             except Exception as e:
                 time.sleep(20)
