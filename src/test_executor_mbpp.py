@@ -22,7 +22,8 @@ from programmer_mbpp import call_completion
 from codegeex.benchmark.utils import read_dataset, IMPORT_HELPER
 from codegeex.benchmark.execution import check_correctness
 import tempfile
-from constant_value import MBPP_PATH, MBPP_PATH_WITH_SUFFIX
+from constant_value import MBPP_DATASET_PATH, MBPP_PATH_WITH_SUFFIX
+from process_data import transform_to_check_function
 
 correct_doctest = 0
 correct_before_doctest = 0
@@ -63,24 +64,7 @@ def process_test(sample, dataset, language=language, test_case=True, canonical_s
     return test_string
 
 
-def preprocess_data(task, lg):
-    if f"```{lg}" in task["completion"]:
-        task["completion"] = task["completion"][task["completion"].find(f"```{lg}") + len(f"```{lg}"):]
-        task["completion"] = task["completion"][:task["completion"].find("```")]
-    elif "```" in task["completion"]:
-        task["completion"] = task["completion"][task["completion"].find("```") + 3:]
-        task["completion"] = task["completion"][:task["completion"].find("```")]
 
-    if f"```{lg}" in task["prompt"]:
-        task["prompt"] = task["prompt"][task["prompt"].find(f"```{lg}") + len(f"```{lg}"):]
-        task["prompt"] = task["prompt"][:task["prompt"].find("```")]
-    elif "```" in task["prompt"]:
-        task["prompt"] = task["prompt"][task["prompt"].find("```") + 3:]
-        task["prompt"] = task["prompt"][:task["prompt"].find("```")]
-
-    if "assert" in task["prompt"]:
-        task["prompt"] = task["prompt"][:task["prompt"].find("assert")]
-    return task
 
 
 class TimeoutException(Exception):
@@ -153,6 +137,109 @@ def test_report(dataset, lg):
     return dataset
 
 
+def check_code(task_id: str, sample: dict, completion_id: Optional[int] = None):
+    try:
+        with swallow_io():
+            with time_limit(2.0):
+                exec(sample["full_code"])
+                result = "passed"
+                
+    except TimeoutException:
+        result="timed out"
+    except AssertionError as e:
+        result=f"failed: AssertionError:{e}"
+    except BaseException as e:
+        result=(f"failed: {e}")
+    except Exception as e:
+        result = f"Exception{e}"
+        pass
+
+    # print("result:======", task_id, result)
+    return {
+        "task_id": task_id,
+        "completion_id": completion_id,
+        "full_code": sample["full_code"],
+        "prompt": sample["prompt"],
+        "completion": sample["completion"],
+        "result": result,
+        "passed": result == "passed",
+        "finish": -1 if "finish" not in sample else sample["finish"],
+        "file": "" if "file" not in sample else sample["file"],
+        "output": [] if "output" not in sample else sample["output"],
+    }
+
+
+def test_agent_concurrency2(dataset, lg):
+    test_setup = "\n".join(IMPORT_HELPER["python"]) + "\n"
+    total_correct = 0
+    _for_completion = 0
+    
+    def process_item(i):
+        # print("dataset[i]=======:", i)
+        if "need_reproduce" in dataset[i].keys() and dataset[i]["need_reproduce"]==False:
+            # dataset[i]["need_reproduce"] = True
+            return dataset[i]["max_correct"], dataset[i]["idx"], dataset[i]["result"]
+        completion_list = []
+        completion_list.append(dataset[i]["completion"])
+        dataset[i]["completion_list"] = completion_list
+        # completion_list = dataset[i]["completion_list"]
+        test_case_list = dataset[i]["test_case_list"]
+        test_case_0 = dataset[i]["test_list"][0]
+        function_name = test_case_0.split("(")[0].split(" ")[-1]
+        correct_list = []
+        result_list = []
+        for j in range(len(completion_list)):
+            correct = 0
+            result = None
+            if f"def {function_name}" not in completion_list[j]:
+                # print(f"NameError: name '{dataset[i]['entry_point']}' is not defined")
+                
+                correct_list.append(correct)
+                result_list.append(f"NameError: name '{function_name}' is not defined")
+                continue
+            for k in range(len(test_case_list)):
+                # TODO
+                # if f"assert {dataset[i]['entry_point']}(" not in test_case_list[k]:
+                #     continue
+                dataset[i]["full_code"] = test_setup + "\n" + completion_list[j] + "\n" + transform_to_check_function(test_case_list[k]) + "\n" + f"check({function_name})"
+                dataset[i]["completion"] = completion_list[j]
+                #  test_case_list[k]
+                result = check_code(dataset[i]["task_id"], dataset[i])
+                # print(f"result: {result['result']}")
+                if result["passed"]:
+                    correct += 1
+            if not result:
+                result_list.append("Error: AssertionError")
+            else:
+                result_list.append(result['result'])
+            correct_list.append(correct)
+
+        max_correct = max(correct_list)
+        idx = correct_list.index(max_correct)
+        result = result_list[idx]
+        # print(f"max_correct: {max_correct}, idx: {idx}")
+        return max_correct, idx, result
+    
+    for i in range(len(dataset)):
+        max_correct, idx, result = process_item(i)
+        if max_correct >= np.ceil(len(dataset[i]["test_case_list"]) * 0.6): # GPT-3.5-turbo-1106's test case accuracy is about 67%. So we choice 60% as the bar.
+            dataset[i]["completion"] = dataset[i]["completion_list"][idx]
+            dataset[i]["need_reproduce"] = False
+            dataset[i]["idx"] = idx
+            dataset[i]["max_correct"] = max_correct
+            dataset[i]["result"] = result
+            _for_completion += 1
+            total_correct += 1
+        else:
+            # print(f"max_correct: {max_correct}, idx: {idx}")
+            dataset[i]["completion"] = dataset[i]["completion_list"][idx]
+            dataset[i]["result"] = result
+    print("==============Start Agent Testing==============")
+    print(f"test_report: {(total_correct/len(dataset)*100):.1f}")
+    print(f"test_for_completion: {(_for_completion/len(dataset)*100):.1f}")
+    return dataset
+
+
 def test_agent(dataset, lg):
     correct = 0
     for i in tqdm(range(len(dataset))):
@@ -184,7 +271,7 @@ if __name__ == "__main__":
             for current_epoch in range(epoch):
                 print(lg, current_epoch)
                 # test_report(dataset, lg)
-                test_agent(dataset, lg)
+                test_agent_concurrency2(dataset, lg)
             #     dataset = call_completion(dataset, model_name, lg)
             #     epoch_path = MBPP_PATH_WITH_SUFFIX.replace("mbpp_temp01.json", f"{current_epoch}_mbpp_temp01.json")
             #     total_path = MBPP_PATH_WITH_SUFFIX.replace("mbpp_temp01.json",

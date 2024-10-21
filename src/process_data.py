@@ -120,6 +120,22 @@ def transform_to_check_function(assert_string):
     result = metadata + check_function
     return result
 
+def extract_fun_name_and_parameters(test_case):
+    # Regex pattern to capture function name and parameters
+    pattern = r'(\w+\s*\([^)]*\))'
+
+    # Search for the pattern in the test case
+    match = re.search(pattern, test_case)
+
+    function_call = 0
+    # Extract and print the function call
+    if match:
+        function_call = match.group(1)
+        # print(function_call)
+    else:
+        print("No function call found.")
+    return function_call
+
 
 
 

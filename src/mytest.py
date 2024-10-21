@@ -1,4 +1,4 @@
-from constant_value import HUMAN_EVAL_DATASET_PATH
+from constant_value import HUMAN_EVAL_DATASET_PATH, MBPP_DATASET_PATH
 import json
 
 import re
@@ -110,28 +110,46 @@ def transform_to_check_function(assert_string):
 
 
 
-with open(HUMAN_EVAL_DATASET_PATH, "r") as f:
-    dataset = json.load(f)
+def extract_fun_name_and_parameters(test_case):
+    # Regex pattern to capture function name and parameters
+    pattern = r'(\w+\s*\([^)]*\))'
 
-dataset = [entry for entry in dataset]
+    # Search for the pattern in the test case
+    match = re.search(pattern, test_case)
 
-# input = dataset[87]["test_case_list"][0]
-# print("=========input===========", 87)
-# print(input)
+    function_call = 0
+    # Extract and print the function call
+    if match:
+        function_call = match.group(1)
+        # print(function_call)
+    else:
+        print("No function call found.")
+    return function_call
 
 
-# output = transform_to_check_function(input)
-# print("=========output===========", 87)
-# print(output)
+# with open(MBPP_DATASET_PATH, "r") as f:
+#     dataset = json.load(f)
 
-for i in range(len(dataset)):
-    input = dataset[i]["test_case_list"][0]
-    print("=========input===========", i)
-    print(input)
+# dataset = [entry for entry in dataset]
+
+# # input = dataset[87]["test_case_list"][0]
+# # print("=========input===========", 87)
+# # print(input)
+
+
+# # output = transform_to_check_function(input)
+# # print("=========output===========", 87)
+# # print(output)
+
+# for i in range(len(dataset)):
+#     test_case_0 = dataset[i]["test_list"][0]
+    
+#     print("=========input===========", i)
+#     print(test_case_0)
     
     
-    output = transform_to_check_function(input)
-    print("=========output===========", i)
-    print(output)
+#     output = extract_fun_name_and_parameters(test_case_0)
+#     print("=========output===========", i)
+#     print(output)
     
     

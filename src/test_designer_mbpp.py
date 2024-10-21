@@ -4,24 +4,14 @@ import json
 from tqdm import tqdm
 import copy
 from openai import OpenAI
-from constant_value import API_KEY, MBPP_PATH, MBPP_PATH_WITH_SUFFIX
-
-client = OpenAI(api_key=API_KEY)
+from constant_value import API_KEY, MBPP_DATASET_PATH, MBPP_PATH_WITH_SUFFIX, MBPP_TEST_PROMPT_PATH
 from concurrent.futures import ThreadPoolExecutor
 import concurrent.futures
 import time
 from datasets import load_dataset
-# Setting API parameters
+from process_data import extract_fun_name_and_parameters
 
-dataset = load_dataset("evalplus/mbppplus", split="test")
-dataset = [entry for entry in dataset]
-task_0_tests = "\n".join(dataset[0]["test_list"])
-task_1_tests = "\n".join(dataset[1]["test_list"])
-
-prompt_path = "../prompts/test_designer_mbpp_prompt_update.txt"
-with open(prompt_path, "r") as f:
-    construct_few_shot_prompt = f.read()
-
+client = OpenAI(api_key=API_KEY)
 
 def preprocess_data(test_case_string):
     if f"```python" in test_case_string:
@@ -32,13 +22,12 @@ def preprocess_data(test_case_string):
     return test_case_string
 
 
-def fetch_completion(data_entry, model, lg, times=5):
-    global construct_few_shot_prompt
+def fetch_completion(construct_few_shot_prompt, data_entry, model, lg, times=5):
     if "need_reproduce" in data_entry.keys() and not data_entry["need_reproduce"]:
         return data_entry
     prompt = data_entry["prompt"]
     test_case_0 = data_entry["test_list"][0]
-    function_name = test_case_0.split("(")[0].split(" ")[-1]
+    function_name = extract_fun_name_and_parameters(test_case_0)
 
     text = f"""
     {construct_few_shot_prompt}
@@ -47,7 +36,14 @@ def fetch_completion(data_entry, model, lg, times=5):
     ```python
     {prompt}
     ```
+    
+    **Function Name and the Example of Parameters**:
+    ```python
+    {function_name}
+    ```
     """
+    
+    # print(text)
     test_case_list = []
     for i in range(times):
         while True:
@@ -98,17 +94,20 @@ def call_fetch_test_completion_helper(dataset, model, lg):
 if __name__ == "__main__":
     model_list = ["gpt-3.5-turbo-1106"]
     language = ["python"]
+    
+    with open(MBPP_TEST_PROMPT_PATH, "r") as f:
+        construct_few_shot_prompt = f.read()
+    
+    with open(MBPP_DATASET_PATH, "r") as f:
+        dataset = json.load(f)
+    dataset = [entry for entry in dataset]
+    
     for model in model_list:
         for lg in language:
-            from datasets import load_dataset
-
-            with open(MBPP_PATH, "r") as f:
-                dataset = json.load(f)
-            dataset = [entry for entry in dataset]
             with ThreadPoolExecutor(max_workers=5) as executor:
                 future_to_entry = {
                     executor.submit(
-                        fetch_completion, copy.deepcopy(entry), model, lg
+                        fetch_completion, construct_few_shot_prompt, copy.deepcopy(entry), model, lg
                     ): entry
                     for entry in tqdm(dataset)
                 }
@@ -121,5 +120,5 @@ if __name__ == "__main__":
                     except Exception as e:
                         print(repr(e))
 
-            with open(MBPP_PATH_WITH_SUFFIX, "w") as f:
+            with open(MBPP_DATASET_PATH, "w") as f:
                 json.dump(dataset, f, indent=4)
