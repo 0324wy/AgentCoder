@@ -187,8 +187,7 @@ def test_agent_concurrency2(dataset, lg):
     _for_completion = 0
     
     def process_item(i):
-        # print("dataset[i]=======:", i)
-        if "need_reproduce" in dataset[i].keys() and dataset[i]["need_reproduce"]==False:
+        if "need_reproduce" in dataset[i].keys() and not dataset[i]["need_reproduce"]:
             # dataset[i]["need_reproduce"] = True
             return dataset[i]["max_correct"], dataset[i]["idx"], dataset[i]["result"]
         completion_list = dataset[i]["completion_list"]
@@ -255,7 +254,7 @@ if __name__ == "__main__":
         for lg in language:
             with open(HUMAN_EVAL_DATASET_PATH, "r") as f:
                 dataset = json.load(f)
-
+            dataset = [entry for entry in dataset]
             epoch = 5
             for current_epoch in range(epoch):
                 # TODO: check test and test code list

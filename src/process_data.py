@@ -61,7 +61,7 @@ def transform_to_check_function(assert_string):
     matches = pattern.findall(cleaned_string)
     
     if not matches:
-        print("No assert statements found.")
+        # print("No assert statements found.")
         return metadata + "def check():\n    pass  # No assertions found\n"
     
     # Extract the function name from the first assert statement
